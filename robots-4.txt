@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://aapka-username.github.io/gadgets-shop/sitemap.xml
