@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SnapGet — Video Downloader</title>
+<style>
+  :root{
+    --bg:#0e0f1a;
+    --panel:#171924;
+    --accent:#7c5cff;
+    --accent2:#ff5c8a;
+    --text:#f1f0f6;
+    --muted:#9b97ad;
+    --ok:#37d399;
+    --err:#ff6b6b;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    background:radial-gradient(circle at 20% 0%, rgba(124,92,255,0.18), transparent 45%),
+               radial-gradient(circle at 85% 30%, rgba(255,92,138,0.14), transparent 45%),
+               var(--bg);
+    color:var(--text);
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    min-height:100vh;
+    padding:0 20px 60px;
+  }
+  header{text-align:center;padding:50px 0 20px;}
+  .logo{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:1.4rem;}
+  .logo .dot{width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));}
+  header p{color:var(--muted);margin-top:10px;font-size:0.95rem;}
+  .platforms{display:flex;justify-content:center;gap:10px;margin-top:18px;flex-wrap:wrap;font-size:0.78rem;color:var(--muted);}
+  .platforms span{border:1px solid #2a2c3a;padding:5px 12px;border-radius:20px;}
+  .card{max-width:600px;margin:30px auto 0;background:var(--panel);border:1px solid #23253a;border-radius:18px;padding:26px;box-shadow:0 20px 50px rgba(0,0,0,0.4);}
+  .input-row{display:flex;gap:10px;flex-wrap:wrap;}
+  input[type=text]{flex:1;min-width:0;background:#10111c;border:1px solid #2a2c3a;color:var(--text);padding:14px 16px;border-radius:12px;font-size:0.95rem;}
+  input[type=text]:focus{outline:2px solid var(--accent);}
+  button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:14px 22px;border-radius:12px;font-weight:700;font-size:0.95rem;cursor:pointer;white-space:nowrap;}
+  button:disabled{opacity:0.5;cursor:not-allowed;}
+  .status{margin-top:16px;font-size:0.88rem;color:var(--muted);min-height:20px;}
+  .status.err{color:var(--err);}
+  .status.ok{color:var(--ok);}
+  .result{margin-top:20px;display:none;}
+  .result.show{display:block;}
+  .result video, .result img{width:100%;border-radius:12px;border:1px solid #2a2c3a;margin-bottom:14px;max-height:360px;object-fit:contain;background:#000;}
+  .dl-links{display:flex;flex-direction:column;gap:10px;}
+  .dl-links a{display:block;text-align:center;background:#1f2233;color:var(--text);border:1px solid #2a2c3a;padding:13px;border-radius:12px;text-decoration:none;font-weight:700;font-size:0.9rem;}
+  .dl-links a:hover{border-color:var(--accent);}
+  .dl-links a.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;}
+  .note{max-width:600px;margin:30px auto 0;font-size:0.8rem;color:var(--muted);text-align:center;line-height:1.6;}
+  .spinner{width:18px;height:18px;border:3px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:6px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="dot"></span>SnapGet</div>
+  <p>Paste any video link — get it without the watermark.</p>
+  <div class="platforms">
+    <span>TikTok</span><span>YouTube</span><span>Instagram</span><span>Facebook</span>
+  </div>
+</header>
+
+<div class="card">
+  <div class="input-row">
+    <input type="text" id="urlInput" placeholder="Paste TikTok / YouTube / Instagram / Facebook link...">
+    <button id="goBtn">Get Video</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result">
+    <video id="previewVideo" controls style="display:none;"></video>
+    <div class="dl-links" id="dlLinks"></div>
+  </div>
+</div>
+
+<p class="note">
+  This tool fetches a direct download link using a third-party public service. Only download videos you own or have permission to use — please respect each platform's terms and the original creator's rights.
+</p>
+
+<script>
+const urlInput = document.getElementById('urlInput');
+const goBtn = document.getElementById('goBtn');
+const statusEl = document.getElementById('status');
+const resultEl = document.getElementById('result');
+const dlLinks = document.getElementById('dlLinks');
+const previewVideo = document.getElementById('previewVideo');
+
+function setStatus(msg, type){
+  statusEl.textContent = msg;
+  statusEl.className = 'status' + (type ? ' ' + type : '');
+}
+
+function resetResult(){
+  resultEl.classList.remove('show');
+  dlLinks.innerHTML = '';
+  previewVideo.style.display = 'none';
+  previewVideo.src = '';
+}
+
+async function fetchVideo(){
+  const url = urlInput.value.trim();
+  if(!url){
+    setStatus('Please paste a video link first.', 'err');
+    return;
+  }
+  resetResult();
+  goBtn.disabled = true;
+  setStatus('Fetching video, please wait...', '');
+  statusEl.innerHTML = '<span class="spinner"></span> Fetching video, please wait...';
+
+  try{
+    const res = await fetch('https://api.cobalt.tools/api/json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ url: url, vQuality: 'max', isAudioOnly: false })
+    });
+
+    if(!res.ok) throw new Error('Service returned an error (status ' + res.status + ').');
+
+    const data = await res.json();
+
+    if(data.status === 'error'){
+      throw new Error(data.text || 'Could not process this link.');
+    }
+
+    if(data.url){
+      previewVideo.src = data.url;
+      previewVideo.style.display = 'block';
+      const a = document.createElement('a');
+      a.href = data.url;
+      a.target = '_blank';
+      a.className = 'primary';
+      a.textContent = '⬇ Download Video';
+      dlLinks.appendChild(a);
+    } else if(data.picker && Array.isArray(data.picker)){
+      data.picker.forEach((item, i) => {
+        const a = document.createElement('a');
+        a.href = item.url;
+        a.target = '_blank';
+        a.className = i === 0 ? 'primary' : '';
+        a.textContent = '⬇ Download Option ' + (i+1);
+        dlLinks.appendChild(a);
+      });
+      if(data.picker[0] && data.picker[0].url){
+        previewVideo.src = data.picker[0].url;
+        previewVideo.style.display = 'block';
+      }
+    } else {
+      throw new Error('No downloadable file found for this link.');
+    }
+
+    resultEl.classList.add('show');
+    setStatus('Done! Tap a download button below.', 'ok');
+
+  } catch(err){
+    console.error(err);
+    setStatus('Could not fetch this video. The link may be private, unsupported, or the service is temporarily unavailable. (' + err.message + ')', 'err');
+  } finally {
+    goBtn.disabled = false;
+  }
+}
+
+goBtn.addEventListener('click', fetchVideo);
+urlInput.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') fetchVideo();
+});
+</script>
+
+</body>
+</html>
